@@ -3,8 +3,10 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from torchvision.datasets import Food101
 import torchvision.models as models
+from torchvision.models import ResNet34_Weights
 import torch.nn as nn
 import torch.optim as optim
+from collections import Counter
 
 
 
@@ -25,7 +27,7 @@ def main():
 
 
     allergen_classes = {
-        "peanut_butter": 0,
+        "sushi": 0,
         "ice_cream" : 1,
         "cheesecake" : 1,
         "pizza" :2,
@@ -54,12 +56,22 @@ def main():
     train_sub = filter_ds(train_ds)
     val_sub = filter_ds(test_ds)
 
+
+    counter = Counter()
+    for _, lbl in train_sub:
+        food = train_ds.classes[lbl]
+        counter[food] += 1
+
+    print("Training counts by food class:")
+    for cls, cnt in counter.items():
+        print(f"  {cls:15s}: {cnt}")
+
     train_loader = DataLoader(train_sub, batch_size=BATCH_SIZE, shuffle=True,  num_workers=2)
     val_loader   = DataLoader(val_sub,   batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
 
 
-    model = models.resnet34(pretrained=True)
+    model = models.resnet34(weights=ResNet34_Weights.DEFAULT)
     in_f = model.fc.in_features
     model.fc = nn.Linear(in_f, num_allergens)
     model = model.to(DEVICE)
@@ -67,7 +79,6 @@ def main():
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=LR)
 
-    # Training loop
     for epoch in range(EPOCHS):
         model.train()
         run_loss = 0
@@ -87,7 +98,6 @@ def main():
 
         print(f"Epoch {epoch+1}/{EPOCHS} — train loss: {run_loss/len(train_sub):.4f}")
 
-        # validation
         model.eval()
         val_loss = 0
         with torch.no_grad():
@@ -104,7 +114,7 @@ def main():
         print(f"          — val loss:   {val_loss/len(val_sub):.4f}\n")
 
     torch.save(model.state_dict(), "allergen_model.pth")
-    print("✅ Saved allergen_model.pth")
+    print("Saved allergen_model.pth")
 
 
 if __name__ == "__main__":
